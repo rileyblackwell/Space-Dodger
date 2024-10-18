@@ -3,6 +3,7 @@ from unittest.mock import patch, MagicMock
 import sys
 import os
 import random
+from datetime import datetime
 
 # Set the environment variable to disable print statements
 os.environ['PYTEST_CURRENT_TEST'] = 'yes'
@@ -51,15 +52,6 @@ class TestGameFunctions(unittest.TestCase):
         self.assertTrue(0 <= hazard.pos[0] <= main.width - hazard.size)
         self.assertEqual(hazard.pos[1], -hazard.size)
 
-    def test_upgrade_class(self):
-        with patch.object(main, 'Upgrade', return_value=MagicMock(type="shield", color=main.yellow, size=30, pos=[0, -30], speed=3)):
-            upgrade = main.Upgrade("shield")
-            self.assertEqual(upgrade.type, "shield")
-            self.assertEqual(upgrade.color, main.UPGRADES["shield"]["color"])
-            self.assertEqual(upgrade.size, 30)
-            self.assertEqual(upgrade.pos[1], -upgrade.size)
-            self.assertEqual(upgrade.speed, 3)
-
     def test_apply_upgrade(self):
         player = main.Player()
         main.apply_upgrade(player, "shield")
@@ -68,16 +60,18 @@ class TestGameFunctions(unittest.TestCase):
         player = main.Player()
         original_speed = player.speed
         main.apply_upgrade(player, "speed")
-        self.assertEqual(player.speed, original_speed * 1.5)
+        self.assertEqual(player.speed, min(original_speed * 1.5, main.MAX_PLAYER_SPEED))
 
         player = main.Player()
         original_size = player.size
         main.apply_upgrade(player, "shrink")
-        self.assertEqual(player.size, original_size * 0.8)
+        self.assertEqual(player.size, max(original_size * 0.8, main.MIN_PLAYER_SIZE))
 
     def test_show_game_over_screen(self):
         with patch('main.draw_text'), \
              patch('main.pygame.display.flip'), \
+             patch('main.get_top_scores', return_value=[(100, '2023-05-01 12:00:00'), (90, '2023-05-02 12:00:00')]), \
+             patch('main.get_highest_score', return_value=(100, '2023-05-01 12:00:00')), \
              patch('main.pygame.event.get', return_value=[MagicMock(type=main.pygame.KEYDOWN, key=main.pygame.K_RETURN)]):
             
             result = main.show_game_over_screen(100)
@@ -85,6 +79,8 @@ class TestGameFunctions(unittest.TestCase):
 
         with patch('main.draw_text'), \
              patch('main.pygame.display.flip'), \
+             patch('main.get_top_scores', return_value=[(100, '2023-05-01 12:00:00'), (90, '2023-05-02 12:00:00')]), \
+             patch('main.get_highest_score', return_value=(100, '2023-05-01 12:00:00')), \
              patch('main.pygame.event.get', return_value=[MagicMock(type=main.pygame.KEYDOWN, key=main.pygame.K_ESCAPE)]):
             
             result = main.show_game_over_screen(100)

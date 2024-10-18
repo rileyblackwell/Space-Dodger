@@ -67,6 +67,10 @@ particle_list = []
 stars = [(random.randint(0, width), random.randint(0, height), random.random()) for _ in range(100)]
 score = 0
 
+# Add this constant near the top of the file, with other game variables
+MAX_PLAYER_SPEED = 15  # Reduced from 20
+MIN_PLAYER_SIZE = 30  # Minimum size the player can shrink to
+
 class Player:
     def __init__(self):
         self.reset()
@@ -74,10 +78,18 @@ class Player:
     def reset(self):
         self.size = 50
         self.pos = [width // 2, height - 2 * self.size]
-        self.speed = 10
+        self.speed = 10  # Initial speed
         self.health = 3
         self.shield = False
         self.design = 0  # 0: Basic, 1: Advanced, 2: Elite
+
+    def increase_speed(self):
+        # Use this method when increasing speed from power-ups
+        self.speed = min(self.speed * 1.5, MAX_PLAYER_SPEED)
+
+    def shrink(self):
+        # Use this method when shrinking from power-ups
+        self.size = max(self.size * 0.8, MIN_PLAYER_SIZE)
 
     def draw(self):
         if self.design == 0:
@@ -352,9 +364,9 @@ def apply_upgrade(player, upgrade_type):
     if upgrade_type == "shield":
         player.shield = True
     elif upgrade_type == "speed":
-        player.speed *= 1.5
+        player.increase_speed()
     elif upgrade_type == "shrink":
-        player.size *= 0.8
+        player.shrink()
 
 def draw_heart(surface, x, y, width, height):
     color = (255, 0, 0)  # Red color for hearts
@@ -498,8 +510,8 @@ if __name__ == "__main__":
     show_start_screen()
     while True:
         final_score = game_loop()
+        insert_score(final_score)  # Always insert the score
         if final_score > high_score:
-            insert_score(final_score)
             high_score = final_score
         if not show_game_over_screen(final_score):
             break

@@ -22,13 +22,12 @@ class TestDatabase(unittest.TestCase):
         self.assertEqual(get_high_score(), 200)
 
     def test_get_top_scores(self):
-        scores = [100, 200, 150, 300, 250]
+        scores = [100, 200, 150, 300, 250, 400]
         for score in scores:
             insert_score(score)
         top_scores = get_top_scores()
         self.assertEqual(len(top_scores), 5)
-        self.assertEqual(top_scores[0][0], 300)
-        self.assertEqual(top_scores[-1][0], 100)
+        self.assertEqual([score for score, _ in top_scores], [400, 300, 250, 200, 150])
 
     def test_update_high_score(self):
         insert_score(100)
@@ -50,6 +49,14 @@ class TestDatabase(unittest.TestCase):
         highest_score, date = get_highest_score()
         self.assertEqual(highest_score, 0)
         self.assertEqual(date, "N/A")
+
+    def test_insert_more_than_five_scores(self):
+        scores = [100, 200, 300, 400, 500, 600, 50]
+        for score in scores:
+            insert_score(score)
+        top_scores = get_top_scores()
+        self.assertEqual(len(top_scores), 5)
+        self.assertEqual([score for score, _ in top_scores], [600, 500, 400, 300, 200])
 
 if __name__ == '__main__':
     unittest.main()

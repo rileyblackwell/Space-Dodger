@@ -16,7 +16,24 @@ def init_db(db_name='game_data.db'):
 def insert_score(score):
     global conn
     c = conn.cursor()
-    c.execute("INSERT INTO high_scores (score, date) VALUES (?, datetime('now'))", (score,))
+    
+    # Get the current number of scores
+    c.execute("SELECT COUNT(*) FROM high_scores")
+    count = c.fetchone()[0]
+    
+    if count < 5:
+        # If we have less than 5 scores, just insert the new score
+        c.execute("INSERT INTO high_scores (score, date) VALUES (?, datetime('now'))", (score,))
+    else:
+        # Get the lowest score
+        c.execute("SELECT MIN(score) FROM high_scores")
+        lowest_score = c.fetchone()[0]
+        
+        if score > lowest_score:
+            # If the new score is higher than the lowest score, replace it
+            c.execute("DELETE FROM high_scores WHERE score = (SELECT MIN(score) FROM high_scores)")
+            c.execute("INSERT INTO high_scores (score, date) VALUES (?, datetime('now'))", (score,))
+    
     conn.commit()
 
 def get_high_score():
