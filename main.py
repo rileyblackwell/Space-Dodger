@@ -42,7 +42,8 @@ except FileNotFoundError:
         pygame.draw.circle(background, (255, 255, 255), (x, y), 1)
 
 # New game variables
-STAR_SYSTEMS = ["Sol", "Alpha Centauri", "Sirius", "Betelgeuse", "Andromeda"]
+STAR_SYSTEMS = ["Sol", "Alpha Centauri", "Sirius", "Betelgeuse", "Andromeda", 
+                "Orion", "Pleiades", "Cygnus", "Cassiopeia", "Galactic Core"]
 HAZARDS = {
     "asteroid": {"speed": 5, "size": 50, "color": (139, 69, 19)},
     "comet": {"speed": 7, "size": 40, "color": (100, 149, 237)},
@@ -78,35 +79,19 @@ class Player:
     def reset(self):
         self.size = 50
         self.pos = [width // 2, height - 2 * self.size]
-        self.speed = 10  # Initial speed
+        self.speed = 10
         self.health = 3
         self.shield = False
         self.design = 0  # 0: Basic, 1: Advanced, 2: Elite
 
     def increase_speed(self):
-        # Use this method when increasing speed from power-ups
         self.speed = min(self.speed * 1.5, MAX_PLAYER_SPEED)
 
     def shrink(self):
-        # Use this method when shrinking from power-ups
         self.size = max(self.size * 0.8, MIN_PLAYER_SIZE)
 
     def draw(self):
-        if self.design == 0:
-            pygame.draw.polygon(window, white, [
-                (self.pos[0] + self.size // 2, self.pos[1]),
-                (self.pos[0], self.pos[1] + self.size),
-                (self.pos[0] + self.size, self.pos[1] + self.size)
-            ])
-        elif self.design == 1:
-            # Draw a more complex ship design
-            pass
-        elif self.design == 2:
-            # Draw an elite ship design
-            pass
-
-        if self.shield:
-            pygame.draw.circle(window, blue, (self.pos[0] + self.size // 2, self.pos[1] + self.size // 2), self.size // 2 + 5, 2)
+        pygame.draw.rect(window, white, (*self.pos, self.size, self.size))
 
 class Hazard:
     def __init__(self, hazard_type):
@@ -120,7 +105,7 @@ class Hazard:
         self.pos[1] += self.speed
 
     def draw(self):
-        pygame.draw.rect(window, self.color, (*self.pos, self.size, self.size))
+        draw_space_invader(window, self.pos[0], self.pos[1], self.size, self.color)
 
 class Upgrade(pygame.sprite.Sprite):
     def __init__(self, upgrade_type):
@@ -177,8 +162,8 @@ def show_start_screen():
     # Instructions
     instructions = [
         "Move: LEFT/RIGHT arrows",
-        "Avoid: Red squares, Yellow/Purple triangles",
-        "Collect: Green (shrink), Blue (speed), Yellow (shield)",
+        "Avoid: Red (normal), Yellow (fast), Purple (big) aliens",
+        "Collect: Green (shrink), Blue (speed), Yellow (shield) circles",
         "3 lives, survive as long as possible!",
         "",
         "Press SPACE to start"
@@ -202,33 +187,30 @@ def show_start_screen():
         pygame.display.flip()
         pygame.time.Clock().tick(30)
 
+def draw_space_invader(surface, x, y, size, color):
+    # Draw the main body
+    pygame.draw.rect(surface, color, (x, y + size // 4, size, size // 2))
+    
+    # Draw the head
+    pygame.draw.rect(surface, color, (x + size // 4, y, size // 2, size // 4))
+    
+    # Draw the tentacles
+    pygame.draw.rect(surface, color, (x, y + size // 2, size // 4, size // 2))
+    pygame.draw.rect(surface, color, (x + size * 3 // 4, y + size // 2, size // 4, size // 2))
+    
+    # Draw the eyes
+    eye_color = (0, 0, 0)  # Black eyes
+    pygame.draw.rect(surface, eye_color, (x + size // 4, y + size // 4, size // 8, size // 8))
+    pygame.draw.rect(surface, eye_color, (x + size * 5 // 8, y + size // 4, size // 8, size // 8))
+
 def draw_enemies(enemy_list):
     for enemy_pos in enemy_list:
         if enemy_pos[2] == "normal":
-            gradient = create_gradient_surface((enemy_size, enemy_size), red, (100, 0, 0))
-            window.blit(gradient, enemy_pos[:2])
+            draw_space_invader(window, enemy_pos[0], enemy_pos[1], enemy_size, red)
         elif enemy_pos[2] == "fast":
-            points = [
-                (enemy_pos[0], enemy_pos[1] + enemy_size),
-                (enemy_pos[0] + enemy_size // 2, enemy_pos[1]),
-                (enemy_pos[0] + enemy_size, enemy_pos[1] + enemy_size)
-            ]
-            gradient = create_gradient_surface((enemy_size, enemy_size), yellow, (100, 100, 0))
-            mask = pygame.Surface((enemy_size, enemy_size), pygame.SRCALPHA)
-            pygame.draw.polygon(mask, (255, 255, 255), points)
-            gradient.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
-            window.blit(gradient, enemy_pos[:2])
+            draw_space_invader(window, enemy_pos[0], enemy_pos[1], enemy_size, yellow)
         elif enemy_pos[2] == "big":
-            points = [
-                (enemy_pos[0], enemy_pos[1]),
-                (enemy_pos[0] + enemy_size, enemy_pos[1]),
-                (enemy_pos[0] + enemy_size // 2, enemy_pos[1] + enemy_size)
-            ]
-            gradient = create_gradient_surface((enemy_size, enemy_size), purple, (50, 0, 50))
-            mask = pygame.Surface((enemy_size, enemy_size), pygame.SRCALPHA)
-            pygame.draw.polygon(mask, (255, 255, 255), points)
-            gradient.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
-            window.blit(gradient, enemy_pos[:2])
+            draw_space_invader(window, enemy_pos[0], enemy_pos[1], int(enemy_size * 1.5), purple)
 
 def draw_power_ups(power_up_list):
     for power_up in power_up_list:
@@ -384,7 +366,7 @@ def draw_heart(surface, x, y, width, height):
     pygame.draw.polygon(surface, color, points)
 
 def game_loop():
-    global score, high_score, level, player_pos, enemy_list, player_size, player_speed, player_health, enemy_speed, paused, player_shield, invincible, invincible_timer, particle_list, player_trail
+    global score, high_score, level, enemy_list, enemy_speed, paused, particle_list, player_trail
 
     player = Player()
     hazards = []
@@ -399,7 +381,7 @@ def game_loop():
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                return score  # Return the score when quitting
+                return score
 
         keys = pygame.key.get_pressed()
         if keys[pygame.K_LEFT] and player.pos[0] > 0:
@@ -436,7 +418,7 @@ def game_loop():
         for upgrade in upgrades[:]:
             if player_rect.colliderect(pygame.Rect(upgrade.pos[0], upgrade.pos[1], upgrade.size, upgrade.size)):
                 apply_upgrade(player, upgrade.type)
-                create_particles(upgrade.pos[0] + upgrade.size // 2, upgrade.pos[1] + upgrade.size // 2, upgrade.color)
+                create_particles(upgrade.pos[0] + upgrade.size // 2, upgrade.pos[1] + upgrade.size // 2, UPGRADES[upgrade.type]["color"])
                 upgrades.remove(upgrade)
 
         # Draw everything
@@ -452,10 +434,7 @@ def game_loop():
         # Display score and level
         draw_text(f"Score: {score}", white, 10, 10)
         draw_text(f"Level: {level + 1} - {star_system}", white, 10, 50)
-
-        # Draw health hearts
-        for i in range(player.health):
-            draw_heart(window, width - 40 - i * 35, 10, 30, 30)  # Adjust position and size as needed
+        draw_text(f"Health: {player.health}", red, width - 150, 10, align="right")
 
         pygame.display.flip()
         pygame.time.Clock().tick(60)
@@ -466,7 +445,7 @@ def game_loop():
             level += 1
             star_system = STAR_SYSTEMS[level]
             for hazard_type in HAZARDS:
-                HAZARDS[hazard_type]["speed"] += 1
+                HAZARDS[hazard_type]["speed"] += 0.5  # Increase speed more gradually
 
     return score
 
@@ -474,7 +453,7 @@ def show_game_over_screen(final_score):
     window.fill(black)
     draw_text("GAME OVER", red, width // 2, height // 8, size=50, align="center")
     draw_text(f"Your Score: {final_score}", white, width // 2, height // 4, align="center")
-    draw_text("Top 5 Scores:", yellow, width // 2, height // 2 - 80, align="center")
+    draw_text(f"Final Level: {level + 1} - {STAR_SYSTEMS[level]}", white, width // 2, height // 3, align="center")
     
     top_scores = get_top_scores()
     for i, (top_score, date) in enumerate(top_scores, 1):
