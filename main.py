@@ -42,8 +42,12 @@ except FileNotFoundError:
         pygame.draw.circle(background, (255, 255, 255), (x, y), 1)
 
 # New game variables
-STAR_SYSTEMS = ["Sol", "Alpha Centauri", "Sirius", "Betelgeuse", "Andromeda", 
-                "Orion", "Pleiades", "Cygnus", "Cassiopeia", "Galactic Core"]
+STAR_SYSTEMS = [
+    "Sol", "Alpha Centauri", "Sirius", "Betelgeuse", "Andromeda", 
+    "Orion", "Pleiades", "Cygnus", "Cassiopeia", "Galactic Core",
+    "Nebula X", "Quasar Y", "Black Hole Z", "Supernova Remnant",
+    "Neutron Star Cluster", "Gamma Ray Burst", "Dark Matter Cloud"
+]
 HAZARDS = {
     "asteroid": {"speed": 5, "size": 50, "color": (139, 69, 19)},
     "comet": {"speed": 7, "size": 40, "color": (100, 149, 237)},
@@ -92,6 +96,15 @@ class Player:
 
     def draw(self):
         pygame.draw.rect(window, white, (*self.pos, self.size, self.size))
+
+    def take_damage(self):
+        if not self.shield:
+            self.health = max(0, self.health - 1)
+        else:
+            self.shield = False
+
+    def heal(self):
+        self.health = min(3, self.health + 1)
 
 class Hazard:
     def __init__(self, hazard_type):
@@ -159,18 +172,17 @@ def show_start_screen():
     # Title
     draw_text("Space Dodger", white, width // 2, height // 8, size=72, align="center")
     
-    # Instructions
+    # More concise instructions
     instructions = [
-        "Move: LEFT/RIGHT arrows",
-        "Avoid: Red (normal), Yellow (fast), Purple (big) aliens",
-        "Collect: Green (shrink), Blue (speed), Yellow (shield) circles",
-        "3 lives, survive as long as possible!",
+        "LEFT/RIGHT: Move",
+        "Dodge: Red, Yellow, Purple aliens",
+        "Collect: Green, Blue, Yellow circles",
         "",
-        "Press SPACE to start"
+        "SPACE to start"
     ]
     
     for i, instruction in enumerate(instructions):
-        draw_text(instruction, white, width // 2, height // 3 + i * 40, size=24, align="center")
+        draw_text(instruction, white, width // 2, height // 3 + i * 40, size=28, align="center")
     
     pygame.display.flip()
 
@@ -365,6 +377,17 @@ def draw_heart(surface, x, y, width, height):
     ]
     pygame.draw.polygon(surface, color, points)
 
+def draw_hearts(health, x, y, size=30):
+    for i in range(health):
+        pygame.draw.polygon(window, red, [
+            (x + i * (size + 5), y + size // 4),
+            (x + i * (size + 5) + size // 2, y),
+            (x + i * (size + 5) + size, y + size // 4),
+            (x + i * (size + 5) + size // 2, y + size)
+        ])
+        pygame.draw.circle(window, red, (x + i * (size + 5) + size // 4, y + size // 4), size // 4)
+        pygame.draw.circle(window, red, (x + i * (size + 5) + size * 3 // 4, y + size // 4), size // 4)
+
 def game_loop():
     global score, high_score, level, enemy_list, enemy_speed, paused, particle_list, player_trail
 
@@ -373,9 +396,15 @@ def game_loop():
     upgrades = []
     score = 0
     level = 0
-    star_system = STAR_SYSTEMS[level]
+    star_system = STAR_SYSTEMS[level % len(STAR_SYSTEMS)]  # Cycle through star systems
     particle_list = []
     player_trail = []
+
+    # Define the score threshold for level up
+    level_threshold = 50
+
+    # Initialize spawn_rate
+    spawn_rate = 0.05
 
     running = True
     while running:
@@ -389,30 +418,43 @@ def game_loop():
         if keys[pygame.K_RIGHT] and player.pos[0] < width - player.size:
             player.pos[0] += player.speed
 
+        # Check for level up
+        if score >= (level + 1) * level_threshold:
+            level += 1
+            star_system = STAR_SYSTEMS[level % len(STAR_SYSTEMS)]
+            for hazard_type in HAZARDS:
+                HAZARDS[hazard_type]["speed"] += 0.1  # Increase speed more gradually
+            
+            # Increase spawn rate
+            spawn_rate = min(0.05 * (1 + level * 0.05), 0.3)  # Cap at 30% spawn rate
+
         # Spawn hazards and upgrades
-        if random.random() < 0.05:
+        if random.random() < spawn_rate:
             hazards.append(Hazard(random.choice(list(HAZARDS.keys()))))
         if random.random() < 0.01:
             upgrades.append(Upgrade(random.choice(list(UPGRADES.keys()))))
 
-        # Update positions
-        for hazard in hazards:
+        # Update positions and check for dodged hazards
+        for hazard in hazards[:]:
             hazard.update()
-        for upgrade in upgrades:
+            if hazard.pos[1] > height:
+                hazards.remove(hazard)
+                score += 1  # Increment score for each dodged hazard
+
+        # Update power-ups
+        for upgrade in upgrades[:]:
             upgrade.update()
+            if upgrade.pos[1] > height:
+                upgrades.remove(upgrade)
 
         # Check collisions
         player_rect = pygame.Rect(player.pos[0], player.pos[1], player.size, player.size)
         for hazard in hazards[:]:
             if player_rect.colliderect(pygame.Rect(hazard.pos[0], hazard.pos[1], hazard.size, hazard.size)):
-                if not player.shield:
-                    player.health -= 1
-                    create_particles(player.pos[0] + player.size // 2, player.pos[1] + player.size // 2, red)
-                    if player.health <= 0:
-                        return score
-                else:
-                    player.shield = False
-                    create_particles(player.pos[0] + player.size // 2, player.pos[1] + player.size // 2, yellow)
+                player.take_damage()
+                create_particles(player.pos[0] + player.size // 2, player.pos[1] + player.size // 2, red)
+                if player.health <= 0:
+                    return score
                 hazards.remove(hazard)
 
         for upgrade in upgrades[:]:
@@ -434,18 +476,10 @@ def game_loop():
         # Display score and level
         draw_text(f"Score: {score}", white, 10, 10)
         draw_text(f"Level: {level + 1} - {star_system}", white, 10, 50)
-        draw_text(f"Health: {player.health}", red, width - 150, 10, align="right")
+        draw_hearts(player.health, width - 110, 10)  # Draw hearts instead of numeric health
 
         pygame.display.flip()
         pygame.time.Clock().tick(60)
-
-        # Increase score and check for level up
-        score += 1
-        if score % 1000 == 0 and level < len(STAR_SYSTEMS) - 1:
-            level += 1
-            star_system = STAR_SYSTEMS[level]
-            for hazard_type in HAZARDS:
-                HAZARDS[hazard_type]["speed"] += 0.5  # Increase speed more gradually
 
     return score
 
@@ -453,7 +487,7 @@ def show_game_over_screen(final_score):
     window.fill(black)
     draw_text("GAME OVER", red, width // 2, height // 8, size=50, align="center")
     draw_text(f"Your Score: {final_score}", white, width // 2, height // 4, align="center")
-    draw_text(f"Final Level: {level + 1} - {STAR_SYSTEMS[level]}", white, width // 2, height // 3, align="center")
+    draw_text(f"Final Level: {level + 1} - {STAR_SYSTEMS[level % len(STAR_SYSTEMS)]}", white, width // 2, height // 3, align="center")
     
     top_scores = get_top_scores()
     for i, (top_score, date) in enumerate(top_scores, 1):
