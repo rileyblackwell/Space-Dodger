@@ -46,6 +46,44 @@ class TestGameFunctions(unittest.TestCase):
         self.assertTrue(0 <= hazard.pos[0] <= main.width - hazard.size)
         self.assertEqual(hazard.pos[1], -hazard.size)
 
+    def test_upgrade_class(self):
+        upgrade = main.Upgrade("shield")
+        self.assertEqual(upgrade.type, "shield")
+        self.assertEqual(upgrade.color, main.UPGRADES["shield"]["color"])
+        self.assertEqual(upgrade.size, 30)
+        self.assertTrue(0 <= upgrade.pos[0] <= main.width - upgrade.size)
+        self.assertEqual(upgrade.pos[1], -upgrade.size)
+        self.assertEqual(upgrade.speed, 3)
+
+    @patch('pygame.draw.circle')
+    @patch('pygame.draw.polygon')
+    @patch('pygame.draw.line')
+    @patch('pygame.draw.arc')
+    def test_upgrade_draw(self, mock_arc, mock_line, mock_polygon, mock_circle):
+        upgrade_types = ["shield", "speed", "shrink", "invincibility", "magnet"]
+        for upgrade_type in upgrade_types:
+            upgrade = main.Upgrade(upgrade_type)
+            upgrade.draw()
+            mock_circle.assert_called()
+            
+            if upgrade_type == "shield":
+                mock_polygon.assert_called()
+                mock_line.assert_called()
+            elif upgrade_type == "speed":
+                mock_polygon.assert_called()
+            elif upgrade_type == "shrink":
+                mock_line.assert_called()
+            elif upgrade_type == "invincibility":
+                self.assertGreater(mock_circle.call_count, 1)
+            elif upgrade_type == "magnet":
+                mock_arc.assert_called()
+                mock_line.assert_called()
+            
+            mock_circle.reset_mock()
+            mock_polygon.reset_mock()
+            mock_line.reset_mock()
+            mock_arc.reset_mock()
+
     def test_apply_upgrade(self):
         player = main.Player()
         main.apply_upgrade(player, "shield")
@@ -69,7 +107,7 @@ class TestGameFunctions(unittest.TestCase):
         main.apply_upgrade(player, "magnet")
         self.assertTrue(player.magnet)
 
-        # Check durations (remove shield duration check)
+        # Check durations
         self.assertEqual(main.UPGRADES["speed"]["duration"], 7)
         self.assertEqual(main.UPGRADES["shrink"]["duration"], 12)
         self.assertEqual(main.UPGRADES["invincibility"]["duration"], 5)

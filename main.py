@@ -4,6 +4,7 @@ import random
 from datetime import datetime
 from database import init_db, insert_score, get_high_score, get_top_scores, get_highest_score
 import os
+import math
 
 # Disable print statements during testing
 if 'PYTEST_CURRENT_TEST' in os.environ:
@@ -150,9 +151,8 @@ class Hazard:
     def draw(self):
         draw_space_invader(window, self.pos[0], self.pos[1], self.size, self.color)
 
-class Upgrade(pygame.sprite.Sprite):
+class Upgrade:
     def __init__(self, upgrade_type):
-        super().__init__()
         self.type = upgrade_type
         self.color = UPGRADES[upgrade_type]["color"]
         self.size = 30
@@ -163,7 +163,76 @@ class Upgrade(pygame.sprite.Sprite):
         self.pos[1] += self.speed
 
     def draw(self):
-        pygame.draw.circle(window, self.color, (self.pos[0] + self.size // 2, self.pos[1] + self.size // 2), self.size // 2)
+        if self.type == "shield":
+            self.draw_shield()
+        elif self.type == "speed":
+            self.draw_speed()
+        elif self.type == "shrink":
+            self.draw_shrink()
+        elif self.type == "invincibility":
+            self.draw_invincibility()
+        elif self.type == "magnet":
+            self.draw_magnet()
+
+    def draw_shield(self):
+        center_x = self.pos[0] + self.size // 2
+        center_y = self.pos[1] + self.size // 2
+        radius = self.size // 2
+
+        pygame.draw.circle(window, self.color, (center_x, center_y), radius, 2)
+        points = [
+            (center_x - radius // 2, center_y + radius // 2),
+            (center_x, center_y - radius // 2),
+            (center_x + radius // 2, center_y + radius // 2)
+        ]
+        pygame.draw.polygon(window, self.color, points, 2)
+        pygame.draw.line(window, self.color, (center_x, center_y + radius // 2), (center_x, center_y + radius - 2), 2)
+
+    def draw_speed(self):
+        center_x = self.pos[0] + self.size // 2
+        center_y = self.pos[1] + self.size // 2
+        radius = self.size // 2
+
+        pygame.draw.circle(window, self.color, (center_x, center_y), radius, 2)
+        points = [
+            (center_x - radius // 2, center_y),
+            (center_x + radius // 2, center_y - radius // 4),
+            (center_x + radius // 2, center_y + radius // 4)
+        ]
+        pygame.draw.polygon(window, self.color, points)
+
+    def draw_shrink(self):
+        center_x = self.pos[0] + self.size // 2
+        center_y = self.pos[1] + self.size // 2
+        radius = self.size // 2
+
+        pygame.draw.circle(window, self.color, (center_x, center_y), radius, 2)
+        pygame.draw.line(window, self.color, (center_x - radius // 2, center_y - radius // 2), (center_x + radius // 2, center_y + radius // 2), 2)
+        pygame.draw.line(window, self.color, (center_x + radius // 2, center_y - radius // 2), (center_x - radius // 2, center_y + radius // 2), 2)
+
+    def draw_invincibility(self):
+        center_x = self.pos[0] + self.size // 2
+        center_y = self.pos[1] + self.size // 2
+        radius = self.size // 2
+
+        pygame.draw.circle(window, self.color, (center_x, center_y), radius, 2)
+        pygame.draw.circle(window, self.color, (center_x, center_y), radius // 2, 2)
+        for i in range(8):
+            angle = i * math.pi / 4
+            x = center_x + int(radius * 0.8 * math.cos(angle))
+            y = center_y + int(radius * 0.8 * math.sin(angle))
+            pygame.draw.circle(window, self.color, (x, y), 2)
+
+    def draw_magnet(self):
+        center_x = self.pos[0] + self.size // 2
+        center_y = self.pos[1] + self.size // 2
+        radius = self.size // 2
+
+        pygame.draw.circle(window, self.color, (center_x, center_y), radius, 2)
+        pygame.draw.arc(window, self.color, (center_x - radius // 2, center_y - radius // 2, radius, radius), math.pi / 2, 3 * math.pi / 2, 2)
+        pygame.draw.arc(window, self.color, (center_x - radius // 2, center_y - radius // 2, radius, radius), -math.pi / 2, math.pi / 2, 2)
+        pygame.draw.line(window, self.color, (center_x - radius // 2, center_y - radius // 4), (center_x - radius // 2, center_y + radius // 4), 2)
+        pygame.draw.line(window, self.color, (center_x + radius // 2, center_y - radius // 4), (center_x + radius // 2, center_y + radius // 4), 2)
 
 def create_gradient_surface(size, color1, color2):
     surface = pygame.Surface(size, pygame.SRCALPHA)
