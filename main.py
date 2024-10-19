@@ -51,14 +51,18 @@ STAR_SYSTEMS = [
 HAZARDS = {
     "asteroid": {"speed": 5, "size": 50, "color": (139, 69, 19)},
     "comet": {"speed": 7, "size": 40, "color": (100, 149, 237)},
-    "alien": {"speed": 6, "size": 60, "color": (50, 205, 50)}
+    "alien": {"speed": 6, "size": 60, "color": (50, 205, 50)},
+    "homing": {"speed": 4, "size": 45, "color": (255, 0, 0)},
+    "splitting": {"speed": 5, "size": 55, "color": (255, 165, 0)},
 }
 
 # Add this after the HAZARDS dictionary
 UPGRADES = {
-    "shield": {"color": yellow},
-    "speed": {"color": blue},
-    "shrink": {"color": green}
+    "shield": {"color": yellow},  # Remove duration for shield
+    "speed": {"color": blue, "duration": 7},
+    "shrink": {"color": green, "duration": 12},
+    "invincibility": {"color": white, "duration": 5},
+    "magnet": {"color": (128, 128, 128), "duration": 15},
 }
 
 # Game variables
@@ -86,7 +90,11 @@ class Player:
         self.speed = 10
         self.health = 3
         self.shield = False
-        self.design = 0  # 0: Basic, 1: Advanced, 2: Elite
+        self.invincible = False
+        self.multi_shot = False
+        self.magnet = False
+        self.special_charge = 0
+        self.combo = 0
 
     def increase_speed(self):
         self.speed = min(self.speed * 1.5, MAX_PLAYER_SPEED)
@@ -106,6 +114,15 @@ class Player:
     def heal(self):
         self.health = min(3, self.health + 1)
 
+    def update(self):
+        self.special_charge = min(100, self.special_charge + 0.1)
+
+    def activate_special(self):
+        if self.special_charge >= 100:
+            self.special_charge = 0
+            return True
+        return False
+
 class Hazard:
     def __init__(self, hazard_type):
         self.type = hazard_type
@@ -113,9 +130,22 @@ class Hazard:
         self.speed = HAZARDS[hazard_type]["speed"]
         self.color = HAZARDS[hazard_type]["color"]
         self.pos = [random.randint(0, width - self.size), -self.size]
+        self.homing_cooldown = 0
 
-    def update(self):
-        self.pos[1] += self.speed
+    def update(self, player_pos):
+        if self.type == "homing":
+            if self.homing_cooldown <= 0:
+                dx = player_pos[0] - self.pos[0]
+                dy = player_pos[1] - self.pos[1]
+                dist = max(1, (dx**2 + dy**2)**0.5)
+                self.pos[0] += dx / dist * self.speed * 0.5  # Reduced homing speed
+                self.pos[1] += dy / dist * self.speed * 0.5
+                self.homing_cooldown = 60  # Set cooldown to 1 second (assuming 60 FPS)
+            else:
+                self.pos[1] += self.speed
+                self.homing_cooldown -= 1
+        else:
+            self.pos[1] += self.speed
 
     def draw(self):
         draw_space_invader(window, self.pos[0], self.pos[1], self.size, self.color)
@@ -172,17 +202,22 @@ def show_start_screen():
     # Title
     draw_text("Space Dodger", white, width // 2, height // 8, size=72, align="center")
     
-    # More concise instructions
+    # Instructions
     instructions = [
         "LEFT/RIGHT: Move",
         "Dodge: Red, Yellow, Purple aliens",
-        "Collect: Green, Blue, Yellow circles",
+        "Collect power-ups:",
+        "  Green: Shrink (easier to dodge)",
+        "  Blue: Speed boost",
+        "  Yellow: Shield (protects from one hit)",
+        "  White: Temporary invincibility",
+        "  Gray: Magnet (attracts power-ups)",
         "",
         "SPACE to start"
     ]
     
     for i, instruction in enumerate(instructions):
-        draw_text(instruction, white, width // 2, height // 3 + i * 40, size=28, align="center")
+        draw_text(instruction, white, width // 2, height // 4 + i * 30, size=24, align="center")
     
     pygame.display.flip()
 
@@ -361,6 +396,10 @@ def apply_upgrade(player, upgrade_type):
         player.increase_speed()
     elif upgrade_type == "shrink":
         player.shrink()
+    elif upgrade_type == "invincibility":
+        player.invincible = True
+    elif upgrade_type == "magnet":
+        player.magnet = True
 
 def draw_heart(surface, x, y, width, height):
     color = (255, 0, 0)  # Red color for hearts
@@ -396,15 +435,15 @@ def game_loop():
     upgrades = []
     score = 0
     level = 0
-    star_system = STAR_SYSTEMS[level % len(STAR_SYSTEMS)]  # Cycle through star systems
+    star_system = STAR_SYSTEMS[level % len(STAR_SYSTEMS)]
     particle_list = []
     player_trail = []
 
-    # Define the score threshold for level up
     level_threshold = 50
-
-    # Initialize spawn_rate
     spawn_rate = 0.05
+
+    # Power-up timers
+    power_up_timers = {upgrade: 0 for upgrade in UPGRADES if "duration" in UPGRADES[upgrade]}
 
     running = True
     while running:
@@ -418,15 +457,13 @@ def game_loop():
         if keys[pygame.K_RIGHT] and player.pos[0] < width - player.size:
             player.pos[0] += player.speed
 
-        # Check for level up
+        # Level up check
         if score >= (level + 1) * level_threshold:
             level += 1
             star_system = STAR_SYSTEMS[level % len(STAR_SYSTEMS)]
             for hazard_type in HAZARDS:
-                HAZARDS[hazard_type]["speed"] += 0.1  # Increase speed more gradually
-            
-            # Increase spawn rate
-            spawn_rate = min(0.05 * (1 + level * 0.05), 0.3)  # Cap at 30% spawn rate
+                HAZARDS[hazard_type]["speed"] += 0.1
+            spawn_rate = min(0.05 * (1 + level * 0.05), 0.3)
 
         # Spawn hazards and upgrades
         if random.random() < spawn_rate:
@@ -436,10 +473,13 @@ def game_loop():
 
         # Update positions and check for dodged hazards
         for hazard in hazards[:]:
-            hazard.update()
+            hazard.update(player.pos)
             if hazard.pos[1] > height:
                 hazards.remove(hazard)
-                score += 1  # Increment score for each dodged hazard
+                score += 1
+                player.combo += 1
+                if player.combo % 10 == 0:
+                    score += player.combo // 10
 
         # Update power-ups
         for upgrade in upgrades[:]:
@@ -451,17 +491,68 @@ def game_loop():
         player_rect = pygame.Rect(player.pos[0], player.pos[1], player.size, player.size)
         for hazard in hazards[:]:
             if player_rect.colliderect(pygame.Rect(hazard.pos[0], hazard.pos[1], hazard.size, hazard.size)):
-                player.take_damage()
-                create_particles(player.pos[0] + player.size // 2, player.pos[1] + player.size // 2, red)
-                if player.health <= 0:
-                    return score
+                if not player.invincible:
+                    if player.shield:
+                        player.shield = False
+                    else:
+                        player.health -= 1
+                        player.combo = 0
+                    create_particles(player.pos[0] + player.size // 2, player.pos[1] + player.size // 2, red)
+                    if player.health <= 0:
+                        return score
                 hazards.remove(hazard)
 
         for upgrade in upgrades[:]:
             if player_rect.colliderect(pygame.Rect(upgrade.pos[0], upgrade.pos[1], upgrade.size, upgrade.size)):
+                if "duration" in UPGRADES[upgrade.type]:
+                    power_up_timers[upgrade.type] = UPGRADES[upgrade.type]["duration"] * 60  # 60 FPS
                 apply_upgrade(player, upgrade.type)
                 create_particles(upgrade.pos[0] + upgrade.size // 2, upgrade.pos[1] + upgrade.size // 2, UPGRADES[upgrade.type]["color"])
                 upgrades.remove(upgrade)
+
+        # Handle special ability
+        if keys[pygame.K_SPACE] and player.activate_special():
+            for hazard in hazards[:]:
+                create_particles(hazard.pos[0] + hazard.size // 2, hazard.pos[1] + hazard.size // 2, hazard.color)
+                hazards.remove(hazard)
+                score += 1
+
+        # Apply power-up effects
+        for upgrade, timer in power_up_timers.items():
+            if timer > 0:
+                power_up_timers[upgrade] -= 1
+                if power_up_timers[upgrade] == 0:
+                    if upgrade == "speed":
+                        player.speed = 10
+                    elif upgrade == "shrink":
+                        player.size = 50
+                    elif upgrade == "invincibility":
+                        player.invincible = False
+                    elif upgrade == "magnet":
+                        player.magnet = False
+
+        if power_up_timers["speed"] > 0:
+            player.speed = min(player.speed, MAX_PLAYER_SPEED)
+        else:
+            player.speed = 10
+
+        if power_up_timers["shrink"] > 0:
+            player.size = max(player.size, MIN_PLAYER_SIZE)
+        else:
+            player.size = 50
+
+        player.invincible = power_up_timers["invincibility"] > 0
+
+        if power_up_timers["magnet"] > 0:
+            # Implement magnet logic here
+            for upgrade in upgrades:
+                dx = player.pos[0] - upgrade.pos[0]
+                dy = player.pos[1] - upgrade.pos[1]
+                dist = (dx**2 + dy**2)**0.5
+                if dist < 200:
+                    upgrade.pos[0] += dx / dist * 5
+                    upgrade.pos[1] += dy / dist * 5
+            power_up_timers["magnet"] -= 1
 
         # Draw everything
         window.blit(background, (0, 0))
@@ -473,10 +564,19 @@ def game_loop():
         draw_particles()
         update_particles()
 
-        # Display score and level
+        # Display score, level, and power-up status
         draw_text(f"Score: {score}", white, 10, 10)
         draw_text(f"Level: {level + 1} - {star_system}", white, 10, 50)
-        draw_hearts(player.health, width - 110, 10)  # Draw hearts instead of numeric health
+        draw_hearts(player.health, width - 110, 10)
+        
+        active_power_ups = [upgrade for upgrade, timer in power_up_timers.items() if timer > 0]
+        if player.shield:
+            active_power_ups.append("shield")
+        for i, power_up in enumerate(active_power_ups):
+            if power_up == "shield":
+                draw_text(f"{power_up.capitalize()}: Active", UPGRADES[power_up]["color"], 10, 90 + i * 30)
+            else:
+                draw_text(f"{power_up.capitalize()}: {power_up_timers[power_up]//60}s", UPGRADES[power_up]["color"], 10, 90 + i * 30)
 
         pygame.display.flip()
         pygame.time.Clock().tick(60)
